@@ -1,0 +1,119 @@
+version: '3.1'
+services:
+
+    zoo:
+      image: confluentinc/cp-zookeeper:5.5.1
+      hostname: zoo
+      ports:
+        - 2181:2181
+      networks:
+        - cluster
+      environment:
+          ZOO_MY_ID: 1
+          ZOO_PORT: 2181
+          ZOO_SERVERS: server.1=zoo:2888:3888
+          ZOOKEEPER_CLIENT_PORT: 2181
+      volumes:
+        - ./volumes/zoo/data:/data
+        - ./volumes/zoo/datalog:/datalog
+
+    kafka:
+      image: confluentinc/cp-kafka:5.5.1
+      hostname: kafka
+      ports:
+        - 9092:9092
+      networks:
+        - cluster
+      environment:
+        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+        KAFKA_ZOOKEEPER_CONNECT: "zoo:2181"
+        KAFKA_BROKER_ID: 1
+        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      volumes:
+        - ./volumes/kafka/data:/var/lib/kafka/data
+      depends_on:
+        - zoo
+
+    kafka-schema-registry:
+      image: confluentinc/cp-schema-registry:5.3.1
+      hostname: kafka-schema-registry
+      ports:
+        - 8081:8081
+      networks:
+        - cluster
+      environment:
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+        SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
+        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      networks:
+        - cluster
+      depends_on:
+        - zoo
+        - kafka
+
+    schema-registry-ui:
+      image: landoop/schema-registry-ui:0.9.4
+      hostname: kafka-schema-registry-ui
+      ports:
+        - 8001:8000
+      environment:
+        SCHEMAREGISTRY_URL: http://kafka-schema-registry:8081/
+        PROXY: "true"
+      networks:
+        - cluster
+      depends_on:
+        - kafka-schema-registry
+
+    kafka-connect:
+      image: confluentinc/cp-kafka-connect:5.5.1
+      hostname: kafka-connect
+      ports:
+        - 8083:8083
+      environment:
+        CONNECT_BOOTSTRAP_SERVERS: "kafka:19092"
+        CONNECT_REST_PORT: 8083
+        CONNECT_GROUP_ID: compose-connect-group
+        CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+        CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+        CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+        CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+        CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+        CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+        CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+        CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+        CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+        CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+        CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+        CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+        CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars'
+      volumes:
+        - ./connectors:/etc/kafka-connect/jars/
+      networks:
+        - cluster
+      depends_on:
+        - zoo
+        - kafka
+
+    kafka-connect-ui:
+      image: landoop/kafka-connect-ui:0.9.4
+      hostname: kafka-connect-ui
+      ports:
+        - 8003:8000
+      networks:
+        - cluster
+      environment:
+        CONNECT_URL: "http://kafka-connect:8083/"
+        PROXY: "true"
+      depends_on:
+        - kafka-connect
+
+networks:
+  cluster:
+    name: "infra_vhub"
+    driver: bridge
