@@ -13,7 +13,9 @@ services:
         KAFKA_BROKERCONNECT: kafka:29092
       depends_on:
         - zoo
-
+      networks:
+        - cluster
+        
     zoo:
       image: confluentinc/cp-zookeeper:5.5.1
       hostname: zoo
