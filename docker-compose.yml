@@ -13,6 +13,8 @@ services:
         KAFKA_BROKERCONNECT: kafka:9092
       depends_on:
         - kafka
+      networks:
+        - cluster
 
     zoo:
       image: confluentinc/cp-zookeeper:5.5.1
