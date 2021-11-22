@@ -114,5 +114,4 @@ services:
 
 networks:
   cluster:
-    name: "infra_vhub"
     driver: bridge
