@@ -1,4 +1,4 @@
-version: '2'
+version: '3.1'
 services:
     zoo:
       image: confluentinc/cp-zookeeper:5.5.1
@@ -111,6 +111,16 @@ services:
         PROXY: "true"
       depends_on:
         - kafka-connect
+
+    kafdrop:
+      image: obsidiandynamics/kafdrop
+      ports:
+        - "9000:9000"
+      environment:
+        KAFKA_BROKERCONNECT: "kafka:29092"
+        JVM_OPTS: "-Xms16M -Xmx48M -Xss180K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify"
+      depends_on:
+        - "kafka"
 
 networks:
   cluster:
